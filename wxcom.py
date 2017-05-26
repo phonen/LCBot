@@ -3,7 +3,8 @@
 
 from wxpy import *
 import re
-
+import requests
+import json
 
 '''
 使用 cache 来缓存登陆信息，同时使用控制台登陆
@@ -16,7 +17,8 @@ bot = Bot('bot.pkl', console_qr=False)
 '''
 bot.enable_puid('wxpy_puid.pkl')
 
-
+myconfig = {'site_url':'http://taotehui.co/'}
+tuling_switch = True
 '''
 邀请信息处理
 '''
@@ -54,7 +56,7 @@ welcome_text = '''🎉 欢迎 @{} 的加入！
 😃 有问题请私聊我。
 '''
 
-invite_text = """欢迎您，我是「Linux 中国」微信群助手，
+invite_text = """欢迎您，我是淘特惠微信群助手，
 请输入如下关键字加入群：
 - 运维 开发 安全 嵌入式 学生 找工作
 - 运维密码  机器人 
@@ -75,8 +77,11 @@ keyword_of_group = {
     "dba":"Linux中国◆DBA群"
 }
 
+#查询订单：*1234567890
+order_id = re.compile(r'^(?:\*(\d{16,17})$)')
+
 # 远程踢人命令: 移出 @<需要被移出的人>
-rp_kick = re.compile(r'^(?:移出|移除|踢出|拉黑)\s*@(.+?)(?:\u2005?\s*$)')
+rp_kick = re.compile(r'^(?:移出|T|t|移除|踢出|拉黑)\s*@(.+?)(?:\u2005?\s*$)')
 
 '''
 地区群
@@ -90,6 +95,15 @@ city_group = {
 female_group="Linux中国◆技术美女群"
 
 # 下方为函数定义
+'''
+处理发送后台查询
+'''
+def wxai_info_post(post_data, action):
+    post_url = myconfig['site_url'] + '?g=Tbkqq&m=WxAi&a=' + action
+    r = requests.post(post_url, post_data)
+    r.encoding = 'utf-8'
+    f = r.text.encode('utf-8')
+    return f
 
 '''
 条件邀请
@@ -128,7 +142,15 @@ def from_admin(msg):
         raise TypeError('expected Message, got {}'.format(type(msg)))
     from_user = msg.member if isinstance(msg.chat, Group) else msg.sender
     print(admins)
-    return from_user in admins
+    if from_user in admins:
+        return True
+    else:
+        if isproxy(msg.sender.name,from_user.name) == "ok":
+            return True
+        else:
+            return False
+
+
 
 '''
 判断消息发送者是否是该群的管理员
@@ -137,28 +159,87 @@ def from_admin(msg):
 
 def isproxy(group, proxywx):
     post_data = {'proxywx': proxywx, 'group': group}
-    post_url = self.site_url + '?g=Tbkqq&m=WxAi&a=isproxy'
+    post_url = myconfig['site_url'] + '?g=Tbkqq&m=WxAi&a=isproxy'
     r = requests.post(post_url, post_data)
     r.encoding = 'utf-8'
     f = r.text.encode('utf-8')
     return f
 
-def is_proxy(msg):
-    """
-    判断 msg 中的发送用户是否该群的管理员
-    :param msg: 
-    :return: 
-    """
+'''
+处理消息文本
+'''
+def handle_group_msg(msg):
+    if msg.type is TEXT:
+        match = order_id.search(msg.text)
+        if match:
+            orderid = match.group(1)
+            post_data = {'oid': orderid, 'proxywx': msg.member.name}
+            reply = wxai_info_post(post_data, 'order_json')
+            return reply
+        else:
+            search_url_pattern = re.compile(u"[a-zA-z]+://[^\s]*")
+            Command_result = search_url_pattern.findall(msg.text)
+            if len(Command_result) > 0:
+                iid = search_iid_from_url(Command_result[0])
+                print
+                u'[INFO] LOG-->Command_result:%s' % (str(Command_result))
+                if iid == '':
+                    post_data = {'group': msg.sender.name, 'proxywx': msg.member.name,
+                                 'msg': msg.text}
+                    reply = wxai_info_post(post_data, 'taoke_info')
+                else:
+                    post_data = {'iid': iid, 'group': msg.sender.name, 'proxywx': msg.member.name}
+                    reply = wxai_info_post(post_data, 'get_taoke_by_iid')
 
-    if not isinstance(msg, Message):
-        raise TypeError('expected Message, got {}'.format(type(msg)))
-    from_user = msg.member if isinstance(msg.chat, Group) else msg.sender
-    print(admins)
-    print(from_user.name)
-    print(msg.sender.name)
-    if msg.sender.name == '擦擦擦4':
-        return True
-    #return from_user in admins
+            elif msg.text.find('http') >= 0:
+                post_data = {'group': msg.sender.name, 'proxywx': msg.member.name,
+                             'msg': msg.text}
+                reply = wxai_info_post(post_data, 'taoke_info')
+
+            else:
+                search_pattern = re.compile(u"^(买|找|帮我找|有没有|我要买|宝宝要|宝宝买|我要找)\s?(.*?)$")
+                Command_result = search_pattern.findall(msg.text)
+
+                if len(Command_result) == 1:
+                    skey = Command_result[0][1]
+                    post_data = {'group': msg.sender.name, 'proxywx': msg.member.name, 'kw': skey}
+                    return_data = wxai_info_post(post_data, 'search_items_by_key')
+                    if return_data != '':
+                        reply = '@' + msg.member.name + u' 搜索结果：%s' % (return_data)
+                    else:
+                        return_data = u'没找到，请到网站查找!http://www.taotehui.co'
+                        reply = '@' + msg.member.name + u' 搜索结果：%s' % (return_data)
+                else:
+                    if tuling_switch:
+                        tuling = Tuling(api_key='0c68515ebcb2920ea3844d4f8fba60fe')
+                        tuling.do_reply(msg)
+                    else:
+                        reply = '@ ' + msg.member.name + ': ' + u"对不起，工作中，不聊天，,,Ծ‸Ծ,,"
+
+
+'''
+查找iid,通过url
+'''
+
+def search_iid_from_url(x):
+    # 从消息中提取的url来进行iid的提取，这个函数代扩容！！
+    search_iid_pattern = re.compile(u"(http|https)://(item\.taobao\.com|detail\.tmall\.com)/(.*?)id=(\d*)")
+    search_iid_pattern_2 = re.compile(u'(http|https)://(a\.m\.taobao\.com)/i(\d*)\.htm')
+    r = requests.get(x, headers={
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.63 Safari/537.36'})
+    iid = ''
+    temp = search_iid_pattern.findall(r.url)
+    if len(temp) == 0:
+        try:
+            iid = search_iid_pattern.findall(r.content)[0][3]
+        except:
+            try:
+                iid = search_iid_pattern_2.findall(r.content)[0][2]
+            except:
+                pass
+    else:
+        iid = temp[0][3]
+    return iid
 
 
 '''
@@ -240,14 +321,17 @@ def exist_friends(msg):
 
 
 # 管理群内的消息处理
-@bot.register(groups, except_self=False)
+@bot.register(Group, except_self=False)
 def wxpy_group(msg):
     ret_msg = remote_kick(msg)
     if ret_msg:
         return ret_msg
     elif msg.is_at:
-        if is_proxy(msg):
-            return 'yes'
+        #return msg.text
+        ret_msg = handle_group_msg(msg)
+        if ret_msg:
+            return ret_msg
+
         else:
             pass
 
