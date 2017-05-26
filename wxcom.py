@@ -130,6 +130,35 @@ def from_admin(msg):
     print(admins)
     return from_user in admins
 
+'''
+判断消息发送者是否是该群的管理员
+'''
+
+
+def isproxy(group, proxywx):
+    post_data = {'proxywx': proxywx, 'group': group}
+    post_url = self.site_url + '?g=Tbkqq&m=WxAi&a=isproxy'
+    r = requests.post(post_url, post_data)
+    r.encoding = 'utf-8'
+    f = r.text.encode('utf-8')
+    return f
+
+def is_proxy(msg):
+    """
+    判断 msg 中的发送用户是否该群的管理员
+    :param msg: 
+    :return: 
+    """
+
+    if not isinstance(msg, Message):
+        raise TypeError('expected Message, got {}'.format(type(msg)))
+    from_user = msg.member if isinstance(msg.chat, Group) else msg.sender
+    print(admins)
+    print(from_user.name)
+    print(msg.sender.name)
+    if msg.sender.name == '擦擦擦4':
+        return True
+    #return from_user in admins
 
 
 '''
@@ -217,7 +246,10 @@ def wxpy_group(msg):
     if ret_msg:
         return ret_msg
     elif msg.is_at:
-        pass
+        if is_proxy(msg):
+            return 'yes'
+        else:
+            pass
 
 
 @bot.register(groups, NOTE)
