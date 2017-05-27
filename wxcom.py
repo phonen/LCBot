@@ -173,20 +173,20 @@ def handle_group_msg(msg):
             Command_result = search_url_pattern.findall(msg.text)
             if len(Command_result) > 0:
                 iid = search_iid_from_url(Command_result[0])
-                print
-                u'[INFO] LOG-->Command_result:%s' % (str(Command_result))
+                print(u'[INFO] LOG-->Command_result:%s' % (str(Command_result)))
                 if iid == '':
+
                     post_data = {'group': msg.sender.name, 'proxywx': msg.member.name,
-                                 'msg': msg.text}
+                                 'msg': Command_result[0]}
                     reply = wxai_info_post(post_data, 'taoke_info')
                 else:
                     post_data = {'iid': iid, 'group': msg.sender.name, 'proxywx': msg.member.name}
                     reply = wxai_info_post(post_data, 'get_taoke_by_iid')
 
-            elif msg.text.find('http') >= 0:
-                post_data = {'group': msg.sender.name, 'proxywx': msg.member.name,
-                             'msg': msg.text}
-                reply = wxai_info_post(post_data, 'taoke_info')
+            #elif msg.text.find('http') >= 0:
+            #    post_data = {'group': msg.sender.name, 'proxywx': msg.member.name,
+            #                 'msg': msg.text}
+            #    reply = wxai_info_post(post_data, 'taoke_info')
 
             else:
                 search_pattern = re.compile(u"^(买|找|帮我找|有没有|我要买|宝宝要|宝宝买|我要找)\s?(.*?)$")
@@ -327,13 +327,13 @@ def wxpy_group(msg):
         else:
             pass
 
-
+'''
 @bot.register(groups, NOTE)
 def welcome(msg):
     name = get_new_member_name(msg)
     if name:
         return welcome_text.format(name)
-
+'''
 
 
 
